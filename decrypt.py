@@ -239,7 +239,9 @@ class JenkinsDecrypt():
             "org.jenkinsci.plugins.kubernetes.credentials.OpenShiftBearerTokenCredentialImpl",
             "org.jenkinsci.plugins.p4.credentials.P4PasswordImpl",
             "org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl",
-            "org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl"
+            "org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl",
+
+            "hudson.model.PasswordParameterDefinition",
         ]
 
         # Find, decrypt, and print credentials for each plugin
@@ -341,6 +343,11 @@ class JenkinsDecrypt():
                         output = "Secret string: {}".format(
                             self.decrypt(cred.get("secret", None)))
                         output = self.add_attributes(output, cred, description="Description", id="ID")
+
+                    elif plugin == "hudson.model.PasswordParameterDefinition":
+                        output = "Default secret value: {}".format(
+                            self.decrypt(cred.get("defaultValue", None)))
+                        output = self.add_attributes(output, cred, description="Description", name="Name")
 
                     # Only print plugin info if we find results
                     if output:
