@@ -20,7 +20,7 @@ class JenkinsDecrypt():
         self.verbose = False
         self.load_master_key(master_key)
         self.load_credentials_confidential_key(hudson_secret_key, "hudson_secret")
-
+        self.credentials_secret = None
 
     def load_master_key(self, master_key):
         """Read master.key which is used to decrypt instances of ConfidentialKey"""
@@ -46,13 +46,10 @@ class JenkinsDecrypt():
         """
         if not data:
             return None
-        try:
-            if self.credentials_secret is None:
-                # The ciphertext doesn't have a newline. So let's at least improve output
-                return data + "\n"
-        except AttributeError:
-            setattr(self, "credentials_secret", None)
-            print("\nWARNING - Use --credentials-secret to specify path to Credentials plugin key\n")
+
+        if self.credentials_secret is None:
+            self.vprint("\nWARNING - Use --credentials-secret to specify path to Credentials plugin key\n")
+            # The ciphertext doesn't have a newline. So let's at least improve output
             return data + "\n"
 
         salt_len = 8
