@@ -29,7 +29,9 @@ class JenkinsDecrypt():
 
 
     def load_credentials_confidential_key(self, path, key_name):
-        """Read and decrypt an instance of ConfidentialKey"""
+        """Read and decrypt an instance of ConfidentialKey
+        https://github.com/jenkinsci/jenkins/blob/jenkins-2.5/core/src/main/java/jenkins/security/DefaultConfidentialStore.java
+        """
         secret_key_file = open(path, "rb").read()
         o = AES.new(self.hashed_master_key, AES.MODE_ECB)
         secret = o.decrypt(secret_key_file)
@@ -38,8 +40,7 @@ class JenkinsDecrypt():
         secret = secret[:16]
         setattr(self, key_name, secret)
 
-
-    def decrypt_secret_bytes(self, data):
+    def decrypt_new_secret_bytes(self, data):
         """decrypt() function from credentials-plugin
         https://github.com/jenkinsci/credentials-plugin/blob/master/src/main/java/com/cloudbees/plugins/credentials/SecretBytes.java#L200
         """
@@ -78,8 +79,35 @@ class JenkinsDecrypt():
         o = AES.new(real_key, AES.MODE_CBC, real_iv)
 
         pt_bytes = o.decrypt(encryptedBytes)
-        return pt_bytes.strip(b"\x0e").decode("utf-8")
+        padlen = pt_bytes[-1]
+        if padlen:
+          pt_bytes = pt_bytes[:-padlen]
 
+        return pt_bytes.decode("utf-8")
+
+    def decrypt_old_secret_bytes(self, data):
+        """decrypt() function from credentials-plugin
+        https://github.com/jenkinsci/plain-credentials-plugin/blob/plain-credentials-1.2/src/main/java/org/jenkinsci/plugins/plaincredentials/impl/FileCredentialsImpl.java
+        https://github.com/jenkinsci/jenkins/blob/jenkins-2.5/core/src/main/java/jenkins/security/CryptoConfidentialKey.java
+        https://github.com/jenkinsci/jenkins/blob/jenkins-2.5/core/src/main/java/jenkins/security/DefaultConfidentialStore.java
+        """
+
+        if not data:
+            return None
+
+        if self.credentials_secret is None:
+            self.vprint("\nWARNING - Use --credentials-secret to specify path to Credentials plugin key\n")
+            # The ciphertext doesn't have a newline. So let's at least improve output
+            return data + "\n"
+
+        o = AES.new(self.credentials_secret, AES.MODE_ECB)
+
+        pt_bytes = o.decrypt(base64.b64decode(data))
+        padlen = pt_bytes[-1]
+        if padlen:
+          pt_bytes = pt_bytes[:-padlen]
+
+        return pt_bytes.decode('utf-8')
 
     def decrypt_new_password(self, p):
         p = p[1:] #Strip the version
@@ -101,18 +129,14 @@ class JenkinsDecrypt():
         iv = p[:iv_length]
         p = p[iv_length:]
         o = AES.new(self.hudson_secret, AES.MODE_CBC, iv)
-        decrypted_p = o.decrypt(p)
+        pt_bytes = o.decrypt(p)
 
-        # We may need to strip PKCS7 padding
-        fully_decrypted_blocks = decrypted_p[:-16]
-        possibly_padded_block = decrypted_p[-16:]
-        padding_length = possibly_padded_block[-1]
-        if padding_length < 16: # Less than size of one block, so we have padding
-            possibly_padded_block = possibly_padded_block[:-padding_length]
+        padlen = pt_bytes[-1]
+        if padlen:
+          pt_bytes = pt_bytes[:-padlen]
 
-        pw = fully_decrypted_blocks + possibly_padded_block
-        pw = pw.decode("utf-8")
-        return pw
+        pt = pt_bytes.decode("utf-8")
+        return pt
 
 
     def decrypt_old_password(self, p):
@@ -232,8 +256,13 @@ class JenkinsDecrypt():
                     if plugin == "com.cloudbees.plugins.credentials.impl.CertificateCredentialsImpl":
                         output = output_fmt.format(
                             "Cert ID: " + cred.get("id", None),
-                            self.decrypt_secret_bytes(cred.get("uploadedKeystoreBytes", None)))
+                            None)
                         output = self.add_attributes(output, cred, description="Description")
+                        if "uploadedKeystoreBytes" in cred:
+                            output = output + "\nFile contents:\n" + self.decrypt_new_secret_bytes(cred.get("uploadedKeystoreBytes", None))
+                        else:
+                            # FIXME - is uploadedKeystoreBytes right?
+                            output = output + "\nFile contents:\n" + self.decrypt_old_secret_bytes(cred.get("uploadedKeystoreBytes", None))
                     elif plugin == "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl":
                         output = output_fmt.format(
                             cred.get("username", None),
@@ -247,8 +276,10 @@ class JenkinsDecrypt():
                     elif plugin == "com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey":
                         output = output_fmt.format(
                             cred.get("username", None),
-                            self.decrypt(cred.get("privateKey", None)))
+                            self.decrypt(cred.get("passphrase", None)))
                         output = self.add_attributes(output, cred, description="Description")
+                        if cred.get('privateKey'):
+                            output = output + "\nPrivate Key File:\n" + self.decrypt(cred['privateKey'])
 
                     ## hudson ##
                     elif plugin == "hudson.plugins.ec2.EC2Cloud":
@@ -300,12 +331,16 @@ class JenkinsDecrypt():
                     elif plugin == "org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl":
                         output = output_fmt.format(
                             cred.get("fileName", None),
-                            self.decrypt_secret_bytes(cred.get("secretBytes", None)))
+                            None)
                         output = self.add_attributes(output, cred, description="Description")
+                        if "secretBytes" in cred:
+                            output = output + "\nFile contents:\n" + self.decrypt_new_secret_bytes(cred.get("secretBytes", None))
+                        else:
+                            output = output + "\nFile contents:\n" + self.decrypt_old_secret_bytes(cred.get("data", None))
                     elif plugin == "org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl":
                         output = "Secret string: {}".format(
                             self.decrypt(cred.get("secret", None)))
-                        output = self.add_attributes(output, cred, description="Description")
+                        output = self.add_attributes(output, cred, description="Description", id="ID")
 
                     # Only print plugin info if we find results
                     if output:
