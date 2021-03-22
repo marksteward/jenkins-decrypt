@@ -218,7 +218,7 @@ class JenkinsDecrypt():
     def print_creds_from_plugins(self, file_tree):
         """Search a file for all plugins and associated values we're interested in."""
         # username / password
-        output_fmt = "{} / {}"
+        output_fmt = "{} / {!r}"
         plugins = [
             "com.cloudbees.plugins.credentials.impl.CertificateCredentialsImpl",
             "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl",
@@ -340,12 +340,12 @@ class JenkinsDecrypt():
                         else:
                             output = output + "\nFile contents:\n" + self.decrypt_old_secret_bytes(cred.get("data", None))
                     elif plugin == "org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl":
-                        output = "Secret string: {}".format(
+                        output = "Secret string: {!r}".format(
                             self.decrypt(cred.get("secret", None)))
                         output = self.add_attributes(output, cred, description="Description", id="ID")
 
                     elif plugin == "hudson.model.PasswordParameterDefinition":
-                        output = "Default secret value: {}".format(
+                        output = "Default secret value: {!r}".format(
                             self.decrypt(cred.get("defaultValue", None)))
                         output = self.add_attributes(output, cred, description="Description", name="Name")
 
