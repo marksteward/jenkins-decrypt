@@ -239,6 +239,7 @@ class JenkinsDecrypt():
             "org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl",
 
             "hudson.model.PasswordParameterDefinition",
+            "hudson.model.PasswordParameterValue",
         ]
 
         # Find, decrypt, and print credentials for each plugin
@@ -342,8 +343,12 @@ class JenkinsDecrypt():
                         output = self.add_attributes(output, cred, description="Description", id="ID")
 
                     elif plugin == "hudson.model.PasswordParameterDefinition":
-                        output = "Default secret value: {!r}".format(
+                        output = "Default password value: {!r}".format(
                             self.decrypt(cred.get("defaultValue", None)))
+                        output = self.add_attributes(output, cred, description="Description", name="Name")
+                    elif plugin == "hudson.model.PasswordParameterValue":
+                        output = "Password value: {!r}".format(
+                            self.decrypt(cred.get("value", None)))
                         output = self.add_attributes(output, cred, description="Description", name="Name")
 
                     # Only print plugin info if we find results
