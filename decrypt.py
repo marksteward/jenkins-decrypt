@@ -212,7 +212,7 @@ class JenkinsDecrypt():
         return base_str
 
 
-    def print_creds_from_plugins(self, file_tree):
+    def print_creds_from_plugins(self, file_tree, filename):
         """Search a file for all plugins and associated values we're interested in."""
         # username / password
         output_fmt = "{} / {!r}"
@@ -354,7 +354,7 @@ class JenkinsDecrypt():
                     # Only print plugin info if we find results
                     if output:
                         finding = True
-                        section_label = "\n=== {} ===".format(plugin)
+                        section_label = "\n=== {}: {} ===".format(filename, plugin)
                         print(section_label)
                         print(output)
                 except KeyError as e:
@@ -412,11 +412,11 @@ def main():
             credentials_file_tree = jd.parse_xml_file(xml_file)
             if not credentials_file_tree:
                 continue
-            jd.print_creds_from_plugins(credentials_file_tree)
+            jd.print_creds_from_plugins(credentials_file_tree, xml_file)
     else:
         credentials_file_tree = jd.parse_xml_file(args.file)
         if credentials_file_tree:
-            jd.print_creds_from_plugins(credentials_file_tree)
+            jd.print_creds_from_plugins(credentials_file_tree, args.file)
 
 
 if __name__ == "__main__":
